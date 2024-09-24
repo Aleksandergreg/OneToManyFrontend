@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Regions</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
+          integrity="sha384-
+EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+</head>
+
+<body class="container">
+<h3>All Regions</h3>
+<div style="height: 300px;overflow-y: scroll;">
+    <table class="table">
+        <thead>
+        <tr>
+            <th>Kode</th>
+            <th>Navn</th>
+            <th>Href</th>
+            <th></th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody id="region-table-body">
+        </tbody>
+    </table>
+</div>
+<button type="button" class="btn btn-primary" id="btn-add-region">
+    Add New Region
+</button>
+<p id="add-error-msg" class="alert alert-danger" style="max-width: 50%;display: none;" role="alert"></p>
+
+<!-- Modal -->
+<div class="modal fade" id="region-modal" tabindex="-1" aria-labelledby="modal-label" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modal-title">Add Region</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Region Kode: <span id="region-kode"></span></p>
+                <form>
+                    <div class="mb-3">
+                        <label for="input-navn" class="form-label">Navn</label>
+                        <input type="text" class="form-control" id="input-navn">
+                    </div>
+                    <div class="mb-3">
+                        <label for="input-href" class="form-label">Href</label>
+                        <input type="text" class="form-control" id="input-href">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button id="btn-save" type="button" class="btn btn-primary" data-bs-dismiss="modal">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- END OF MODAL -->
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-
+MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM"
+        crossorigin="anonymous"></script>
+
+<script>
+    let regions = [];
+
+    const URLregions = "http://localhost:8080/regions";
+    const URLregion = "http://localhost:8080/region";
+
+    function setUpHandlers() {
+        document.getElementById("region-table-body").onclick = handleTableClick;
+        document.getElementById("btn-save").onclick = saveRegion;
+        document.getElementById("btn-add-region").onclick = makeNewRegion;
+    }
+    setUpHandlers();
+
+    function handleTableClick(evt) {
+        evt.preventDefault();
+        evt.stopPropagation();
+        const target = evt.target;
+
+        if (target.dataset.kodeDelete) {
+            const kodeToDelete = target.dataset.kodeDelete;
+
+            const options = makeOptions("DELETE");
+            fetch(`${URLregion}/${kodeToDelete}`, options)
+                .then(handleHttpErrors)
+                .then(() => {
+                    regions = regions.filter(r => r.kode !== kodeToDelete);
+                    makeRows();
+                })
+                .catch(err => {
+                    console.error(err.message);
+                });
+        }
+
+        if (target.dataset.kodeEdit) {
+            const kodeToEdit = target.dataset.kodeEdit;
+            const region = regions.find(r => r.kode === kodeToEdit);
+            showModal(region);
+        }
+    }
+
+    function makeNewRegion() {
+        showModal({
+            kode: "",
+            navn: "",
+            href: ""
+        });
+    }
+
+    function showModal(region) {
+        const myModal = new bootstrap.Modal(document.getElementById('region-modal'));
+        document.getElementById("modal-title").innerText = region.kode ? "Edit Region" : "Add Region";
+        document.getElementById("region-kode").innerText = region.kode || "New";
+        document.getElementById("input-navn").value = region.navn;
+        document.getElementById("input-href").value = region.href;
+        myModal.show();
+    }
+
+    async function saveRegion() {
+        let region = {};
+        region.kode = document.getElementById("region-kode").innerText;
+        region.navn = document.getElementById("input-navn").value;
+        region.href = document.getElementById("input-href").value;
+
+        if (region.kode && region.kode !== "New") { // Edit
+            const options = makeOptions("PUT", region);
+            try {
+                region = await fetch(`${URLregion}/${region.kode}`, options)
+                    .then(handleHttpErrors);
+                regions = regions.map(r => (r.kode === region.kode) ? region : r);
+            } catch (err) {
+                console.error(err.message);
+            }
+        } else { // Add new
+            // Prompt user to enter a unique kode
+            region.kode = prompt("Enter a unique kode for the new region:");
+            if (!region.kode) {
+                alert("Kode is required.");
+                return;
+            }
+            const options = makeOptions("POST", region);
+            try {
+                region = await fetch(URLregion, options)
+                    .then(handleHttpErrors);
+                regions.push(region);
+            } catch (err) {
+                console.error(err.message);
+            }
+        }
+
+        makeRows();
+    }
+
+    async function fetchRegions() {
+        try {
+            regions = await fetch(URLregions)
+                .then(handleHttpErrors);
+            makeRows();
+        } catch (err) {
+            console.error(err.message);
+        }
+    }
+
+    function makeRows() {
+        const rows = regions.map(r => `
+            <tr>
+                <td>${r.kode}</td>
+                <td>${r.navn}</td>
+                <td>${r.href}</td>
+                <td><a data-kode-delete="${r.kode}" href="#">Delete</a></td>
+                <td><a data-kode-edit="${r.kode}" href="#">Edit</a></td>
+            </tr>
+        `);
+        document.getElementById("region-table-body").innerHTML = rows.join("");
+    }
+
+    fetchRegions();
+
+    function makeOptions(method, body) {
+        const opts = {
+            method: method,
+            headers: {
+                "Content-type": "application/json",
+                "Accept": "application/json"
+            }
+        };
+        if (body) {
+            opts.body = JSON.stringify(body);
+        }
+        return opts;
+    }
+
+    async function handleHttpErrors(res) {
+        if (!res.ok) {
+            const errorResponse = await res.json();
+            const error = new Error(errorResponse.message || "An error occurred");
+            error.apiError = errorResponse;
+            throw error;
+        }
+        if (res.status === 204) {
+            return null;
+        }
+        return res.json();
+    }
+</script>
+</body>
+</html>
